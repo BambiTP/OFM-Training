@@ -717,76 +717,87 @@ function handleBeginContact(contact) {
     const entryA = balls[A];
     const entryB = balls[B];
 
-    // if either is currently respawning/disabled, ignore
-    if (!entryA.canControl || !entryB.canControl) return;
+    // ignore if either is disabled
+    if (!entryA.canControl || !entryB.canControl) {
+      return;
+    }
 
+    // A drops flag on B
     if (dataA.flag) {
-  dataA.flag    = false;
-  entryA.flag   = false;
-  dataB.flag    = true;
-  entryB.flag   = true;
-  respawn(A);
+      dataA.flag    = false;
+      entryA.flag   = false;
+      dataB.flag    = true;
+      entryB.flag   = true;
+setTimeout(() => respawn(A), 0);
 
-  // Only play friendly sounds if *you* dropped the flag
-  if (A === playerId) {
-    playSound('friendlydrop');
-    playSound('alert',{ volume: 0.5 });
+      if (A === playerId) {
+        playSound('friendlydrop', { volume: 0.5 });
+        playSound('alert');
+      }
+      if (B === playerId) {
+        playSound('friendlyalert', { volume: 0.5 });
+        playSound('drop');
+      }
+    }
+    // B drops flag on A
+    else if (dataB.flag) {
+      dataB.flag    = false;
+      entryB.flag   = false;
+      dataA.flag    = true;
+      entryA.flag   = true;
+      setTimeout(() => respawn(B), 0);
+      if (B === playerId) {
+        playSound('friendlydrop', { volume: 0.5 });
+        playSound('alert');
+      }
+      if (A === playerId) {
+        playSound('friendlyalert', { volume: 0.5 });
+        playSound('drop');
+      }
+    }
+
+    // we've handled the ball↔ball case, bail out
+    return;
   }
 
-  // Only play enemy drop sound if *they* dropped the flag on *you*
-  if (B === playerId) {
-    playSound('friendlyalert',{ volume: 0.5 });
-    playSound('drop');
-  }
-}
-else if (dataB.flag) {
-  dataB.flag    = false;
-  entryB.flag   = false;
-  dataA.flag    = true;
-  entryA.flag   = true;
-  respawn(B);
-
-  if (B === playerId) {
-    playSound('friendlydrop');
-    playSound('alert');
-  }
-
-  if (A === playerId) {
-    playSound('friendlyalert');
-    playSound('drop');
-  }
-}
-
-
+  // ───────── Ball ↔ Ground‐Flag ─────────
   let ballData, flagData;
   if (dataA.type === 'ball' && dataB.tile === 'YellowFlag') {
-    ballData = dataA;  flagData = dataB;
-  } else if (dataB.type === 'ball' && dataA.tile === 'YellowFlag') {
-    ballData = dataB;  flagData = dataA;
-  } else {
-    return; // not a ball‑flag contact
+    ballData = dataA;
+    flagData = dataB;
+  }
+  else if (dataB.type === 'ball' && dataA.tile === 'YellowFlag') {
+    ballData = dataB;
+    flagData = dataA;
+  }
+  else {
+    // neither ball↔ball nor ball↔flag
+    return;
   }
 
   const idx = ballData.index;
   const entry = balls[idx];
 
-  // skip if flag already taken or ball is disabled
-  if (flagData.state === 0 || !entry.canControl) return;
+  // skip if already taken or ball disabled
+  if (flagData.state === 0 || !entry.canControl) {
+    return;
+  }
 
-  // mark flag as taken
+  // mark ground‐flag as taken & give to ball
   flagData.state = 0;
-
-  // give flag to ball
-  entry.flag       = true;
-  ballData.flag    = true;
+  entry.flag     = true;
+  ballData.flag  = true;
 
   // fade out the ground‐flag sprite
   const key = `${flagData.gridX},${flagData.gridY}`;
   const picked = midground.children.find(s => s._gridKey === key);
-  if (picked) picked.alpha = 0.3;
+  if (picked) {
+    picked.alpha = 0.3;
+  }
 
   // clear its grid coords
-  flagData.gridX = flagData.gridY = null;
+  flagData.gridX = null;
+  flagData.gridY = null;
 }
 
 
