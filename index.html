@@ -16,7 +16,7 @@
   
 </head>
 <body>
-<script type="module">
+<script type = module>
 const playerId = 0;
 const pixelsPerTPU = 100;
 const viewportWidth = 1280;
@@ -90,10 +90,6 @@ const SoundManager = {
   }
 };
 
-await SoundManager.load('drop', '/sounds/drop.mp3');
-await SoundManager.load('friendlydrop',    '/sounds/friendlydrop.mp3');
-await SoundManager.load('friendlyalert',    '/sounds/friendlyalert.mp3');
-await SoundManager.load('alert',    '/sounds/alert.mp3');
   (async () => {
     // same resume‐on‐click trick
     window.addEventListener('click', () => {
