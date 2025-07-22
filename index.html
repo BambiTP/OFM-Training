@@ -728,11 +728,11 @@ function handleBeginContact(contact) {
       entryB.flag   = true;
       respawn(A);
       if (dataA.index === playerId)
-          SoundManager.play('friendlydrop');
-          SoundManager.play("alert")
+          playSound('friendlydrop');
+          playSound("alert")
         if (dataB.index === playerId)
-        SoundManager.play("drop")
-        SoundManager.play("friendlyalert")  
+        playSound("drop")
+        playSound("friendlyalert")  
     }
     // else if B has the flag, pass to A
     else if (dataB.flag) {
