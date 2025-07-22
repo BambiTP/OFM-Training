@@ -64,20 +64,26 @@ let world
 
   // initialize your sounds
   const SFX = {
-    drop: new Howl({ src: ['sounds/drop.mp3'] }),
-    friendlydrop: new Howl({ src: ['sounds/friendlydrop.mp3'] }),
-    friendlyalert: new Howl({ src: ['sounds/friendlyalert.mp3'] }),
-    alert: new Howl({ src: ['sounds/alert.mp3'] }),
-  };
+  drop: new Howl({ src: ['sounds/drop.mp3'] }),
+  friendlydrop: new Howl({ src: ['sounds/friendlydrop.mp3'] }),
+  friendlyalert: new Howl({ src: ['sounds/friendlyalert.mp3'] }),
+  alert: new Howl({ src: ['sounds/alert.mp3'] }),
+};
 
-  // then to play:
-  function playSound(name, opts = {}) {
-    if (SFX[name]) {
-      SFX[name].play(opts);
-    } else {
-      console.warn(`Sound "${name}" not found`);
-    }
+// 2) A correct playSound wrapper:
+function playSound(name, { volume = 1, loop = false } = {}) {
+  const sound = SFX[name];
+  if (!sound) {
+    console.warn(`Sound "${name}" not found`);
+    return;
   }
+  // start playback, get the sound ID
+  const id = sound.play();
+  // then set volume/loop on that specific instance
+  sound.volume(volume, id);
+  sound.loop(loop, id);
+  return id;
+}
 
 const quadrantCoords = {
     "132": [10.5, 7.5],
