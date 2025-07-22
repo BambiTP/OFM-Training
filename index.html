@@ -550,9 +550,10 @@ async function start(mapId) {
     await redrawBackgroundAsOneTexture();
 const centerX = (mapWidthGrid * gridSizeTPU) / 2;
 const centerY = (mapHeightGrid * gridSizeTPU) / 2;
-
-  createBall(centerX * 0.5, centerY, "blue");
-  createBall(centerX * 0.5, centerY, "red");
+      tx = 23 * gridSizeTPU + gridSizeTPU/2;
+      ty =  1 * gridSizeTPU + gridSizeTPU/2;
+  createBall(23 * gridSizeTPU + gridSizeTPU/2, 1 * gridSizeTPU + gridSizeTPU/2, "blue");
+  createBall(1 * gridSizeTPU + gridSizeTPU/2, 17 * gridSizeTPU + gridSizeTPU/2 , "red");
     gameLoop();
     createAllPhysicsBodies();
 }
