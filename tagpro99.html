@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PIXI Tile Grid</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #222;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/gh/BambiTP/box2dcdn@main/Box2dWeb-2.1.a.3.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/8.6.6/pixi.min.js"></script>
+  
+</head>
+<body>
+<script>
+const playerId = 0;
+const pixelsPerTPU = 100;
+const viewportWidth = 1280;
+const viewportHeight = 800;
+const gravityY = 0;
+const timestep = 1 / 60;
+const quadrantSizePixels = 20;
+const gridSizePixels = 40;
+const gridSizeTPU = gridSizePixels / pixelsPerTPU;
+const convertTpuToPixels = (tpu) => tpu * pixelsPerTPU;
+const multiplayer = false;
+const playerProperties = {
+    radius: 0.19,
+    density: 1,
+    friction: 0.5,
+    restitution: 0.2,
+    linearDamping: 0.5,
+    angularDamping: 0.5,
+    accel: 0.025,
+    maxSpeed: 2.5,
+};
+let wallMap = [];
+let globalMap = [];
+let background,foreground,midground, app,layerContainers;
+let mapWidthPixels = 0;
+let mapWidthGrid = 0;
+let mapHeightPixels = 0;
+let mapHeightGrid = 0;
+const frameCache = {};
+const sheetCache = {};
+
+
+const   b2Vec2              = Box2D.Common.Math.b2Vec2,
+        b2World             = Box2D.Dynamics.b2World,
+        b2BodyDef           = Box2D.Dynamics.b2BodyDef,
+        b2Body              = Box2D.Dynamics.b2Body,
+        b2FixtureDef        = Box2D.Dynamics.b2FixtureDef,
+        b2CircleShape       = Box2D.Collision.Shapes.b2CircleShape,
+        b2PolygonShape      = Box2D.Collision.Shapes.b2PolygonShape,
+        b2ContactListener   = Box2D.Dynamics.b2ContactListener;
+let world
+
+const SoundManager = {
+  ctx: new (window.AudioContext || window.webkitAudioContext)(),
+  buffers: {},
+
+  // Load and decode an audio file into memory
+  async load(name, url) {
+    const resp = await fetch(url);
+    const arrayBuffer = await resp.arrayBuffer();
+    this.buffers[name] = await this.ctx.decodeAudioData(arrayBuffer);
+  },
+
+  // Play a named sound; creates a new buffer source each time so sounds can overlap
+  play(name, { volume = 1, loop = false } = {}) {
+    const buffer = this.buffers[name];
+    if (!buffer) {
+      console.warn(`Sound "${name}" not found. Did you call SoundManager.load()?`);
+      return;
+    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    src.loop = loop;
+
+    const gain = this.ctx.createGain();
+    gain.gain.value = volume;
+
+    src.connect(gain).connect(this.ctx.destination);
+    src.start(0);
+    return src;  // you can call src.stop() if you need to halt it early
+  }
+};
+
+await SoundManager.load('drop', '/sounds/drop.mp3');
+await SoundManager.load('friendlydrop',    '/sounds/friendlydrop.mp3');
+await SoundManager.load('friendlyalert',    '/sounds/friendlyalert.mp3');
+await SoundManager.load('alert',    '/sounds/alert.mp3');
+
+
+const quadrantCoords = {
+    "132": [10.5, 7.5],
+    "232": [11, 7.5],
+    "332": [11, 8],
+    "032": [10.5, 8],
+    "132d": [0.5, 3.5],
+    "232d": [1, 3.5],
+    "032d": [0.5, 4],
+    "143": [4.5, 9.5],
+    "243": [5, 9.5],
+    "343": [5, 10],
+    "043": [4.5, 10],
+    "143d": [1.5, 2.5],
+    "243d": [2, 2.5],
+    "043d": [1.5, 3],
+    "154": [6.5, 9.5],
+    "254": [7, 9.5],
+    "354": [7, 10],
+    "054": [6.5, 10],
+    "154d": [9.5, 2.5],
+    "254d": [10, 2.5],
+    "354d": [10, 3],
+    "165": [0.5, 7.5],
+    "265": [1, 7.5],
+    "365": [1, 8],
+    "065": [0.5, 8],
+    "165d": [10.5, 3.5],
+    "265d": [11, 3.5],
+    "365d": [11, 4],
+    "176": [1.5, 6.5],
+    "276": [2, 6.5],
+    "376": [2, 7],
+    "076": [1.5, 7],
+    "276d": [9, 1.5],
+    "376d": [9, 2],
+    "076d": [8.5, 2],
+    "107": [6.5, 8.5],
+    "207": [7, 8.5],
+    "307": [7, 9],
+    "007": [6.5, 9],
+    "207d": [11, 1.5],
+    "307d": [11, 2],
+    "007d": [10.5, 2],
+    "110": [4.5, 8.5],
+    "210": [5, 8.5],
+    "310": [5, 9],
+    "010": [4.5, 9],
+    "110d": [0.5, 1.5],
+    "310d": [1, 2],
+    "010d": [0.5, 2],
+    "121": [9.5, 6.5],
+    "221": [10, 6.5],
+    "321": [10, 7],
+    "021": [9.5, 7],
+    "121d": [2.5, 1.5],
+    "321d": [3, 2],
+    "021d": [2.5, 2],
+    "142": [1.5, 7.5],
+    "242": [2, 7.5],
+    "042": [1.5, 8],
+    "142d": [10.5, 0.5],
+    "242d": [11, 0.5],
+    "042d": [10.5, 1],
+    "153": [5.5, 6.5],
+    "253": [6, 6.5],
+    "353": [6, 7],
+    "053": [5.5, 7],
+    "153d": [5.5, 0.5],
+    "253d": [6, 0.5],
+    "164": [9.5, 7.5],
+    "264": [10, 7.5],
+    "364": [10, 8],
+    "164d": [0.5, 0.5],
+    "264d": [1, 0.5],
+    "364d": [1, 1],
+    "175": [4.5, 5.5],
+    "275": [5, 5.5],
+    "375": [5, 6],
+    "075": [4.5, 6],
+    "275d": [7, 1.5],
+    "375d": [7, 2],
+    "206": [4.5, 9.5],
+    "306": [4.5, 10],
+    "006": [3.5, 10],
+    "206d": [2, 3.5],
+    "306d": [2, 4],
+    "006d": [1.5, 4],
+    "117": [5.5, 2.5],
+    "217": [6, 2.5],
+    "317": [6, 4],
+    "017": [5.5, 4],
+    "317d": [6, 3],
+    "017d": [5.5, 3],
+    "120": [7.5, 9.5],
+    "320": [8, 10],
+    "020": [7.5, 10],
+    "120d": [9.5, 3.5],
+    "320d": [10, 4],
+    "020d": [9.5, 4],
+    "131": [6.5, 5.5],
+    "231": [7, 5.5],
+    "331": [7, 6],
+    "031": [6.5, 6],
+    "131d": [4.5, 1.5],
+    "031d": [4.5, 2],
+    "141": [7.5, 8.5],
+    "241": [8, 8.5],
+    "323": [4, 5],
+    "041": [7.5, 9],
+    "141d": [8.5, 3.5],
+    "041d": [8.5, 4],
+    "152": [8.5, 7.5],
+    "252": [9, 7.5],
+    "334": [2, 0],
+    "052": [8.5, 8],
+    "152d": [3.5, 0.5],
+    "252d": [4, 0.5],
+    "163": [2, 7.5],
+    "263": [3, 7.5],
+    "363": [3, 8],
+    "045": [9.5, 0],
+    "163d": [7.5, 0.5],
+    "263d": [8, 0.5],
+    "174": [3.5, 8.5],
+    "274": [4, 8.5],
+    "374": [4, 9],
+    "056": [7.5, 5],
+    "274d": [3, 3.5],
+    "374d": [3, 4],
+    "167": [7.5, 6.5],
+    "205": [10, 8.5],
+    "305": [10, 9],
+    "005": [9.5, 9],
+    "205d": [2, 0.5],
+    "305d": [2, 1],
+    "170": [6.5, 7.5],
+    "216": [9, 9.5],
+    "316": [9, 10],
+    "016": [8.5, 10],
+    "316d": [10, 5],
+    "016d": [9.5, 5],
+    "127": [2.5, 9.5],
+    "201": [5, 7.5],
+    "327": [3, 10],
+    "027": [2.5, 10],
+    "327d": [2, 5],
+    "027d": [1.5, 5],
+    "130": [1.5, 8.5],
+    "212": [4, 6.5],
+    "330": [2, 9],
+    "030": [1.5, 9],
+    "130d": [9.5, 0.5],
+    "030d": [9.5, 1],
+    "151": [10.5, 9.5],
+    "251": [11, 9.5],
+    "324": [0, 7],
+    "051": [10.5, 10],
+    "151d": [10.5, 4.5],
+    "324d": [0, 0],
+    "162": [8.5, 10.5],
+    "262": [9, 10.5],
+    "335": [6, 8],
+    "035": [5.5, 8],
+    "162d": [3.5, 2.5],
+    "262d": [8, 2.5],
+    "173": [0.5, 9.5],
+    "273": [1, 9.5],
+    "373": [1, 10],
+    "046": [11.5, 7],
+    "046d": [11.5, 0],
+    "273d": [1, 4.5],
+    "157": [11.5, 8.5],
+    "204": [0, 5.5],
+    "304": [0, 5],
+    "057": [11.5, 9],
+    "204d": [0, 4.5],
+    "304d": [0, 6],
+    "160": [11.5, 7.5],
+    "215": [8, 6.5],
+    "315": [8, 7],
+    "015": [7.5, 7],
+    "160d": [2.5, 4.5],
+    "315d": [9, 3],
+    "171": [5.5, 10.5],
+    "271": [6, 10.5],
+    "326": [6, 5],
+    "026": [5.5, 5],
+    "326d": [7, 5],
+    "026d": [4.5, 5],
+    "137": [3.5, 6.5],
+    "202": [0, 7.5],
+    "337": [4, 7],
+    "037": [3.5, 7],
+    "202d": [9, 4.5],
+    "037d": [2.5, 3],
+    "140": [11.5, 5.5],
+    "213": [0, 8.5],
+    "313": [0, 9],
+    "040": [11.5, 5],
+    "140d": [11.5, 4.5],
+    "040d": [11.5, 6],
+    "161": [9.5, 10.5],
+    "261": [10, 10.5],
+    "325": [9, 6],
+    "025": [8.5, 6],
+    "161d": [3.5, 1.5],
+    "325d": [4, 1],
+    "172": [1.5, 10.5],
+    "272": [2, 10.5],
+    "336": [3, 6],
+    "036": [2.5, 6],
+    "036d": [7.5, 1],
+    "272d": [8, 1.5],
+    "147": [4.5, 7.5],
+    "203": [4, 3.5],
+    "303": [4, 4],
+    "047": [4.5, 8],
+    "047d": [8.5, 5],
+    "203d": [8, 4.5],
+    "150": [7.5, 3.5],
+    "214": [7, 7.5],
+    "314": [7, 8],
+    "050": [7.5, 4],
+    "150d": [3.5, 4.5],
+    "314d": [3, 5],
+    "100": [5.5, 5.5],
+    "200": [6, 5.5],
+    "300": [6, 6],
+    "000": [5.5, 6],
+    "100d": [5.5, 8.5],
+    "200d": [6, 8.5],
+    "300d": [6, 10],
+    "000d": [5.5, 10]
+};
+const wallData= [
+  { id: 1,  name: 'Wall',         color: '#787878', image: 'tiles',  wallSolids: 0xff },
+  { id: 2,  name: '45TL',         color: '#408050', image: 'tiles',  wallSolids: 0xd2 },
+  { id: 3,  name: '45TR',         color: '#405080', image: 'tiles',  wallSolids: 0x4b },
+  { id: 4,  name: '45BL',         color: '#807040', image: 'tiles',  wallSolids: 0xb4 },
+  { id: 5,  name: '45BR',         color: '#804070', image: 'tiles',  wallSolids: 0x2d },
+
+]
+
+
+const tileData = [
+  { id: 1,  name: 'Wall',         color: '#787878', x: 13, y: 4, image: 'tiles',     hasBackground: false, shape: 'square',   rotation: '0',   size: '40', sensor: false, layer: 'background' },
+  { id: 6,  name: 'Floor',        color: '#d4d4d4', x: 13, y: 4, image: 'tiles',     hasBackground: false,                                                                layer: 'background' },
+  { id: 7,  name: 'YellowFlag',   color: '#808000', x: 13, y: 1, image: 'tiles',     hasBackground: true,  shape: 'circle',   rotation: '0',   size: '15', sensor: true,  layer: 'midground' },
+  { id: 35, name: 'RedBall',  color: '' ,    x: 14, y: 0,    image: 'tiles' },
+  { id: 36, name: 'BlueBall', color: '',    x: 15, y: 0,    image: 'tiles' }
+
+];
+
+const sheetUrls = {
+  tiles:      'https://static.koalabeast.com/textures/mtbad/tiles.png',
+};
+
+function wallSolidsAt(col, row) {
+    if (col < 0 || row < 0 || row >= wallMap.length || col >= wallMap[0].length) return 0;
+    return wallMap[row][col];
+}
+
+function drawWallTile(col, row) {
+    const solids = wallMap[row][col];
+    if (!solids) return;
+    for (let q = 0; q < 4; q++) {
+        const mask = (solids >> (q << 1)) & 3;
+        if (mask === 0) continue;
+        const cornerX = col + ((q & 2) === 0 ? 1 : 0);
+        const cornerY = row + (((q + 1) & 2) === 0 ? 0 : 1);
+        let aroundCorner =
+            (wallSolidsAt(cornerX, cornerY) & 0xc0) |
+            (wallSolidsAt(cornerX - 1, cornerY) & 0x03) |
+            (wallSolidsAt(cornerX - 1, cornerY - 1) & 0x0c) |
+            (wallSolidsAt(cornerX, cornerY - 1) & 0x30);
+        aroundCorner |= (aroundCorner << 8);
+        const startDirection = q * 2 + 1;
+        let cwSteps = 0;
+        while (cwSteps < 8 && (aroundCorner & (1 << (startDirection + cwSteps)))) {
+            cwSteps++;
+        }
+        let ccwSteps = 0;
+        while (ccwSteps < 8 && (aroundCorner & (1 << (startDirection + 7 - ccwSteps)))) {
+            ccwSteps++;
+        }
+        const hasChip = (mask === 3 && (((solids | (solids << 8)) >> ((q + 2) << 1)) & 3) === 0);
+        let solidStart, solidEnd;
+        if (cwSteps === 8) {
+            solidStart = solidEnd = 0;
+        } else {
+            solidEnd = (startDirection + cwSteps + 4) % 8;
+            solidStart = (startDirection - ccwSteps + 12) % 8;
+        }
+        const key = `${q}${solidStart}${solidEnd}${hasChip ? "d" : ""}`;
+        const coords = quadrantCoords[key] || [5.5, 5.5];
+        let destX = col * gridSizePixels;
+        let destY = row * gridSizePixels;
+        if (q === 0) destX += quadrantSizePixels;
+        else if (q === 1) {
+            destX += quadrantSizePixels;
+            destY += quadrantSizePixels;
+        } else if (q === 2) destY += quadrantSizePixels;
+        const srcX = coords[0] * 40;
+        const srcY = coords[1] * 40;
+        drawTile(key, destX, destY, background)
+    }
+}
+
+const colorToId = tileData.reduce((m, {
+    color,
+    id
+}) => {
+    m.set(color.toLowerCase(), id);
+    return m;
+}, new Map());
+
+async function makeMapArray(mapId) {
+    wallMap = [];
+    globalMap = [];
+    const corsProxy = "https://cors.bambitp.workers.dev/?url=";
+    const url = corsProxy + `https://fortunatemaps.herokuapp.com/png/${mapId}.png`;
+    const img = new Image();
+
+    img.crossOrigin = 'anonymous';
+    img.src = url;
+   await new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = () => reject(new Error("Image failed to load"));
+});
+    const imageWidth = img.naturalWidth;
+    const imageHeight = img.naturalHeight;
+    const canvas2 = document.createElement('canvas');
+    canvas2.width = imageWidth;
+    canvas2.height = imageHeight;
+    const ctx = canvas2.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const data = ctx.getImageData(0, 0, imageWidth, imageHeight)
+        .data;
+    const wallLookup = wallData.reduce((lookup, tile) => {
+        lookup[tile.color.toLowerCase()] = tile.wallSolids;
+        return lookup;
+    }, {});
+
+    for (let y = 0; y < canvas2.height; y++) {
+        wallMap[y] = [];
+        for (let x = 0; x < canvas2.width; x++) {
+            const idx = (y * canvas2.width + x) * 4;
+            const r = data[idx],
+                g = data[idx + 1],
+                b = data[idx + 2],
+                a = data[idx + 3];
+            const hex = ('#' + rgbToHex(r, g, b))
+                .toLowerCase();
+            wallMap[y][x] = (a === 0) ?
+                0 :
+                (wallLookup.hasOwnProperty(hex) ?
+                    wallLookup[hex] :
+                    0);
+        }
+    }
+
+
+    globalMap = Array.from({
+        length: imageHeight
+    }, (_, y) => {
+        const row = new Array(imageWidth);
+        for (let x = 0; x < imageWidth; x++) {
+            const i = (y * imageWidth + x) * 4;
+            const hex = (
+                    '#' +
+                    data[i + 0].toString(16)
+                    .padStart(2, '0') +
+                    data[i + 1].toString(16)
+                    .padStart(2, '0') +
+                    data[i + 2].toString(16)
+                    .padStart(2, '0')
+                )
+                .toLowerCase();
+
+         row[x] = colorToId.get(hex) || 0;
+}
+        return row;
+    });
+}
+function rgbToHex(r, g, b) {
+    return ((1 << 24) + (r << 16) + (g << 8) + b)
+        .toString(16)
+        .slice(1);
+}
+
+
+function drawTilesLoop() {
+  for (let y = 0; y < mapHeightGrid; y++) {
+    for (let x = 0; x < mapWidthGrid; x++) {
+      const tileId = globalMap[y][x];
+      const tile   = tileData.find(t => t.id === tileId);
+       if (!tile) {
+        continue;
+      }
+      drawTile(tileId, x * gridSizePixels, y * gridSizePixels, tile.layer);
+      drawWallTile(x, y);
+    }
+  }
+}
+
+async function redrawBackgroundAsOneTexture() {
+    const renderTex = PIXI.RenderTexture.create({ width: mapWidthPixels, height: mapHeightPixels });
+    app.renderer.render(background, { renderTexture: renderTex });
+    const canvas = app.renderer.extract.canvas(renderTex);
+    const dataurl = canvas.toDataURL('image/png');
+    const img = new Image();
+    img.src = dataurl;
+    const mapImage = await PIXI.Assets.load(img);
+    const redraw = new PIXI.Sprite(mapImage);
+    background.removeChildren();
+    background.addChild(redraw);
+}
+
+async function initPixi() {
+      app = new PIXI.Application();
+         await app.init({
+       width: viewportWidth,
+       height: viewportHeight,
+    });
+    document.body.appendChild(app.canvas);      
+    background = new PIXI.Container();
+    midground = new PIXI.Container();
+    foreground = new PIXI.Container();  
+    layerContainers = { background, midground, foreground };
+    app.stage.addChild(background);
+    app.stage.addChild(midground);
+    app.stage.addChild(foreground);
+
+}
+async function start(mapId) {
+    initPhysics()
+    await makeMapArray(mapId);
+    const rows = globalMap.length;
+    if (!rows) {
+        console.error("makeMapArray() returned an empty map!");
+        return;
+    }
+    const cols = globalMap[0].length;
+    mapHeightPixels = rows * 40;
+    mapWidthPixels = cols * 40;
+    mapHeightGrid = rows;
+    mapWidthGrid = cols;
+    await initPixi();
+    await cacheAllFrames();
+    await cacheAllQuadrants();
+    await drawTilesLoop();
+    await redrawBackgroundAsOneTexture();
+const centerX = (mapWidthGrid * gridSizeTPU) / 2;
+const centerY = (mapHeightGrid * gridSizeTPU) / 2;
+
+  createBall(centerX * 0.5, centerY, "blue");
+  createBall(centerX * 0.5, centerY, "red");
+    gameLoop();
+    createAllPhysicsBodies();
+}
+
+function update() {
+
+  applyMovement();
+  world.Step(timestep, 8, 3);
+  world.ClearForces();
+  syncGraphics();
+  syncAllBalls();
+}
+function multiUpdate() {
+
+  applyMovement();
+  world.Step(timestep, 8, 3);
+  world.ClearForces();
+  centerScreen();
+  syncAllBalls();
+}
+function gameLoop(){
+  app.ticker.add(() => {
+    if (!multiplayer) {
+      update();
+    } else {
+      multiUpdate();
+    }
+  });
+}
+
+
+async function cacheAllQuadrants() {
+    const imageKey = 'tiles';
+    const url = sheetUrls[imageKey];
+    if (!sheetCache[url]) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        const imgLoaded = new Promise((res, rej) => {
+            img.onload = () => res();
+            img.onerror = (e) => rej(e);
+        });
+        img.src = url;
+        await imgLoaded;
+        sheetCache[url] = {
+            source: new PIXI.ImageSource({
+                resource: img
+            }),
+            img,
+        };
+    }
+    const {
+        source
+    } = sheetCache[url];
+    for (const [quadId, [sheetCol, sheetRow]] of Object.entries(quadrantCoords)) {
+        const frame = new PIXI.Rectangle(
+            sheetCol * gridSizePixels,
+            sheetRow * gridSizePixels,
+            quadrantSizePixels,
+            quadrantSizePixels
+        );
+        frameCache[quadId] = new PIXI.Texture({
+            source,
+            frame
+        });
+    }
+}
+
+
+async function cacheAllFrames() {
+    for (const {
+            image
+        }
+        of tileData) {
+        const url = sheetUrls[image];
+        if (!sheetCache[url]) {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            const imgLoaded = new Promise((res, rej) => {
+                img.onload = () => res();
+                img.onerror = (e) => rej(e);
+            });
+            img.src = url;
+            await imgLoaded;
+            const source = new PIXI.ImageSource({
+                resource: img
+            });
+            sheetCache[url] = {
+                source,
+                img
+            };
+        }
+    }
+    for (const {
+            id,
+            x: sheetCol,
+            y: sheetRow,
+            image
+        }
+        of tileData) {
+        const {
+            source,
+            img
+        } = sheetCache[sheetUrls[image]];
+        const frame = new PIXI.Rectangle(
+            sheetCol * gridSizePixels,
+            sheetRow * gridSizePixels,
+            gridSizePixels,
+            gridSizePixels
+        );
+        frameCache[id] = new PIXI.Texture({
+            source,
+            frame
+        });
+    }
+}
+
+function drawTile(id, x, y, layer) {
+  const container = layerContainers[layer] || layerContainers.background;
+  const tex = frameCache[id];
+    if (!tex) {
+        return null;
+    }
+
+    const tile = tileData.find(t => t.id === id);
+
+    if (tile && tile.hasBackground) {
+        const bgTex = frameCache[6];
+        if (bgTex) {
+            const bgSprite = new PIXI.Sprite(bgTex);
+            bgSprite.x = x;
+            bgSprite.y = y;
+              const gridX = Math.floor(x / gridSizePixels);
+            const gridY = Math.floor(y / gridSizePixels);
+            bgSprite._gridKey = `${gridX},${gridY}`
+            background.addChild(bgSprite);
+        } 
+    }
+
+    const sprite = new PIXI.Sprite(tex);
+    sprite.x = x;
+    sprite.y = y;
+    const gridX = Math.floor(x / gridSizePixels);
+    const gridY = Math.floor(y / gridSizePixels);
+    sprite._gridKey = `${gridX},${gridY}`
+    container.addChild(sprite);
+    return sprite;
+}
+
+
+//Planck Code
+
+ function initPhysics() {
+  world = new b2World(new b2Vec2(0, gravityY));
+  world.SetContactListener(createContactListener());
+}
+
+function createContactListener() {
+  const listener = new b2ContactListener();
+
+  listener.BeginContact = handleBeginContact;
+  listener.EndContact    = () => {};
+  listener.PreSolve      = () => {};
+  listener.PostSolve     = () => {};
+
+  return listener;
+}
+
+function handleBeginContact(contact) {
+  const fixA = contact.GetFixtureA();
+  const fixB = contact.GetFixtureB();
+  const dataA = fixA.GetUserData();
+  const dataB = fixB.GetUserData();
+  if (!dataA || !dataB) return;
+
+  // ───────── Ball ↔ Ball ─────────
+  if (dataA.type === 'ball' && dataB.type === 'ball') {
+    const A = dataA.index;
+    const B = dataB.index;
+    const entryA = balls[A];
+    const entryB = balls[B];
+
+    // if either is currently respawning/disabled, ignore
+    if (!entryA.canControl || !entryB.canControl) return;
+
+    // if A has the flag, pass to B
+    if (dataA.flag) {
+      dataA.flag    = false;
+      entryA.flag   = false;
+      dataB.flag    = true;
+      entryB.flag   = true;
+      respawn(A);
+      if (dataA.index === playerId)
+          SoundManager.play('friendlydrop');
+          SoundManager.play("alert")
+        if (dataB.index === playerId)
+        SoundManager.play("drop")
+        SoundManager.play("friendlyalert")  
+    }
+    // else if B has the flag, pass to A
+    else if (dataB.flag) {
+      dataB.flag    = false;
+      entryB.flag   = false;
+      dataA.flag    = true;
+      entryA.flag   = true;
+      respawn(B);
+         if (dataB.index === playerId)
+        playSound("friendlydrop")
+        playSound("alert")
+        if (dataA.index === playerId)
+        playSound("drop")
+        playSound("friendlyalert")    
+
+    }
+
+    return;
+  }
+
+
+  let ballData, flagData;
+  if (dataA.type === 'ball' && dataB.tile === 'YellowFlag') {
+    ballData = dataA;  flagData = dataB;
+  } else if (dataB.type === 'ball' && dataA.tile === 'YellowFlag') {
+    ballData = dataB;  flagData = dataA;
+  } else {
+    return; // not a ball‑flag contact
+  }
+
+  const idx = ballData.index;
+  const entry = balls[idx];
+
+  // skip if flag already taken or ball is disabled
+  if (flagData.state === 0 || !entry.canControl) return;
+
+  // mark flag as taken
+  flagData.state = 0;
+
+  // give flag to ball
+  entry.flag       = true;
+  ballData.flag    = true;
+
+  // fade out the ground‐flag sprite
+  const key = `${flagData.gridX},${flagData.gridY}`;
+  const picked = midground.children.find(s => s._gridKey === key);
+  if (picked) picked.alpha = 0.3;
+
+  // clear its grid coords
+  flagData.gridX = flagData.gridY = null;
+}
+
+
+function respawn(ballIndex) {
+  const entry  = balls[ballIndex];
+  const body   = entry.body;
+  const sprite = entry.sprite;
+  const team   = entry.team;
+
+  body.SetActive(false);
+
+  triggerExplosion(body, 5, 0.7);
+
+  entry.canControl = false;
+  sprite.visible   = false;
+
+
+  // 3) stop movement
+  body.SetLinearVelocity(new b2Vec2(0, 0));
+  body.SetAngularVelocity(0);
+  body.SetAngle(0);
+
+  // 4) schedule the “respawn” after 3s
+  setTimeout(() => {
+    // pick spawn‐coords by team
+    let tx, ty;
+    if (team === "red") {
+      tx = 23 * gridSizeTPU + gridSizeTPU/2;
+      ty =  1 * gridSizeTPU + gridSizeTPU/2;
+    } else {
+      tx =  1 * gridSizeTPU + gridSizeTPU/2;
+      ty = 17 * gridSizeTPU + gridSizeTPU/2;
+    }
+
+    // reposition, reactivate physics & visuals
+    body.SetPosition(new b2Vec2(tx, ty));
+    body.SetActive(true);
+    sprite.visible = true;
+    entry.canControl = true;
+  }, 3000);
+}
+
+function triggerExplosion(bombBody, strength, radius) {
+    const center = bombBody.GetPosition();
+
+    // Iterate through all bodies in the world
+    for (let b = world.GetBodyList(); b; b = b.GetNext()) {
+        // Skip if the body is not dynamic or not active
+        if (b.GetType() !== b2Body.b2_dynamicBody || !b.IsActive()) {
+            continue;
+        }
+
+        const pos = b.GetPosition();
+        const dx = pos.x - center.x;
+        const dy = pos.y - center.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        // Apply impulse if within radius
+        if (dist > 0 && dist < radius) {
+            const boost = strength * (radius - dist);
+            const dir = new b2Vec2(dx / dist, dy / dist);
+            const vel = b.GetLinearVelocity().Copy();
+            vel.x += dir.x * boost;
+            vel.y += dir.y * boost;
+            b.SetLinearVelocity(vel);
+        }
+    }
+}
+
+
+function createPhysicsBody(x, y, tile, size, shape, sensor, rotation) {
+  const meterSize = (size / 100);
+
+  const bx = x * gridSizeTPU + gridSizeTPU / 2;
+  const by = y * gridSizeTPU + gridSizeTPU / 2;
+
+  const bodyDef = new b2BodyDef();
+  bodyDef.type     = b2Body.b2_staticBody;
+  bodyDef.position = new b2Vec2(bx, by);
+  bodyDef.angle    = rotation || 0;
+
+  const body = world.CreateBody(bodyDef);
+
+  const fixDef = new b2FixtureDef();
+  fixDef.isSensor = !!sensor;
+
+  if (shape === 'circle') {
+    fixDef.shape = new b2CircleShape(meterSize);
+  }
+  else if (shape === 'square') {
+    const half = meterSize / 2;
+    fixDef.shape = new b2PolygonShape();
+    fixDef.shape.SetAsBox(half, half);
+  }
+  else if (shape === 'triangle') {
+    const half = meterSize / 2;
+    const verts = [
+      new b2Vec2( +half, +half ),
+      new b2Vec2( -half, +half ),
+      new b2Vec2( +half, -half ),
+    ];
+    fixDef.shape = new b2PolygonShape();
+    fixDef.shape.SetAsArray(verts, verts.length);
+  }
+  else {
+    return;
+  }
+
+  const fixture = body.CreateFixture(fixDef);
+
+let userData = {
+  tile: tile,
+  gridX: x,
+  gridY: y
+};
+
+if (tile === "YellowFlag") {
+  userData.state = 1;
+}
+
+fixture.SetUserData(userData);
+
+  return body;
+}
+
+
+    window.addEventListener('keydown', (e) => handleKey(e, true));
+    window.addEventListener('keyup', (e) => handleKey(e, false));
+
+function handleKey(e, isDown) {
+  switch (e.key) {
+    // Ball #1 (arrows)
+    case 'ArrowLeft':  balls[playerId].input.left  = isDown; break;
+    case 'ArrowRight': balls[playerId].input.right = isDown; break;
+    case 'ArrowUp':    balls[playerId].input.up    = isDown; break;
+    case 'ArrowDown':  balls[playerId].input.down  = isDown; break;
+
+    // Ball #2 (WASD)
+    case 'a': case 'A': balls[1].input.left  = isDown; break;
+    case 'd': case 'D': balls[1].input.right = isDown; break;
+    case 'w': case 'W': balls[1].input.up    = isDown; break;
+    case 's': case 'S': balls[1].input.down  = isDown; break;
+  }
+}
+
+
+
+function syncAllBalls() {
+  for (let { body, sprite, flagSprite, flag } of balls) {
+    const p = body.GetPosition();
+    const px = convertTpuToPixels(p.x);
+    const py = convertTpuToPixels(p.y);
+
+    // move & rotate the ball
+    sprite.x = px;
+    sprite.y = py;
+    sprite.rotation = body.GetAngle();
+
+    if (flag) {
+      const offsetY = 11;
+      const offsetX = 12;
+      flagSprite.x = px + offsetX;
+      flagSprite.y = py - offsetY;
+      flagSprite.rotation = 0;
+      flagSprite.visible = true;
+    } else {
+      flagSprite.visible = false;
+    }
+  }
+}
+
+
+function applyMovement() {
+  for (let { body, input, canControl } of balls) {
+    if (!canControl) continue;
+    const v = body.GetLinearVelocity();
+    let vx = v.x, vy = v.y;
+
+    if (input.left  && vx > -playerProperties.maxSpeed) vx -= playerProperties.accel;
+    if (input.right && vx <  playerProperties.maxSpeed) vx += playerProperties.accel;
+    if (input.up    && vy > -playerProperties.maxSpeed) vy -= playerProperties.accel;
+    if (input.down  && vy <  playerProperties.maxSpeed) vy += playerProperties.accel;
+
+    body.SetLinearVelocity(new b2Vec2(vx, vy));
+  }
+}
+
+
+
+const balls = [];
+
+function createBall(tpuX, tpuY, team) {
+  const index = balls.length;
+
+  const bodyDef = new b2BodyDef();
+  bodyDef.type = b2Body.b2_dynamicBody;
+  bodyDef.position.Set(tpuX, tpuY);
+  bodyDef.linearDamping = playerProperties.linearDamping;
+  bodyDef.angularDamping = playerProperties.angularDamping;
+
+  const body = world.CreateBody(bodyDef);
+  const mini = new PIXI.Sprite(frameCache[7]);
+  mini.anchor.set(0.5, 1);
+  foreground.addChild(mini);
+
+  const fixDef = new b2FixtureDef();
+  fixDef.shape = new b2CircleShape(playerProperties.radius);
+  fixDef.density = playerProperties.density;
+  fixDef.friction = playerProperties.friction;
+  fixDef.restitution = playerProperties.restitution;
+
+  const fixture = body.CreateFixture(fixDef);
+
+  // Set userData with index
+  const userData = { type: 'ball', team: team, index: index };
+  body.SetUserData(userData);
+  fixture.SetUserData(userData);
+
+  let sprite;
+  if (team === 'red') {
+    sprite = new PIXI.Sprite(frameCache[35]);
+  } else if (team === 'blue') {
+    sprite = new PIXI.Sprite(frameCache[36]);
+  } else {
+    sprite = new PIXI.Sprite(frameCache[35]);
+  }
+
+  sprite.anchor.set(0.5);
+  foreground.addChild(sprite);
+
+  balls.push({
+    body,
+    sprite,
+    input: { left: false, right: false, up: false, down: false },
+    flag: false , 
+    canControl: true ,
+    flagSprite: mini , 
+    team: team
+  });
+
+  return { body, sprite };
+}
+
+
+function createAllPhysicsBodies() {
+    const rows = globalMap.length;
+    const cols = globalMap[0].length;
+
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const tileId = globalMap[row][col];
+            if (!tileId) continue;
+            const tile = tileData.find(t => t.id === tileId);
+            if (!tile) continue;
+            if (!tile.shape) continue;
+            const size = parseFloat(tile.size || 40);
+            const shape = tile.shape;
+            const sensor = !!tile.sensor;
+            const rotRad = parseFloat(tile.rotation || '0') * Math.PI / 180;
+            const name = tile.name;
+            createPhysicsBody(col, row, name, size, shape, sensor, rotRad);
+        }
+    }
+}
+function syncGraphics() {
+  if (balls.length === 0) return;
+
+  const { body } = balls[playerId];
+  const p = body.GetPosition();
+  const px = convertTpuToPixels(p.x);
+  const py = convertTpuToPixels(p.y);
+
+    app.stage.position.set(
+    app.renderer.screen.width  / 2 - px,
+    app.renderer.screen.height / 2 - py
+  );
+}
+
+
+
+
+  start(64362);
+
+</script>
+</body>
+</html>
