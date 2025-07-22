@@ -735,8 +735,8 @@ function handleBeginContact(contact) {
 setTimeout(() => respawn(A), 0);
 
       if (A === playerId) {
-        playSound('friendlydrop', { volume: 0.5 });
-        playSound('alert');
+        playSound('friendlydrop');
+        playSound('alert',{ volume: 0.5 });
       }
       if (B === playerId) {
         playSound('friendlyalert', { volume: 0.5 });
