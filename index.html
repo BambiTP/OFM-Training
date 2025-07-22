@@ -730,12 +730,12 @@ function handleBeginContact(contact) {
   // Only play friendly sounds if *you* dropped the flag
   if (A === playerId) {
     playSound('friendlydrop');
-    playSound('alert'{ volume: 0.5 });
+    playSound('alert',{ volume: 0.5 });
   }
 
   // Only play enemy drop sound if *they* dropped the flag on *you*
   if (B === playerId) {
-    playSound('friendlyalert'{ volume: 0.5 });
+    playSound('friendlyalert',{ volume: 0.5 });
     playSound('drop');
   }
 }
