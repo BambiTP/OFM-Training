@@ -90,11 +90,24 @@ const SoundManager = {
   }
 };
 
-SoundManager.load('drop', '/sounds/drop.mp3');
-SoundManager.load('friendlydrop',    '/sounds/friendlydrop.mp3');
-SoundManager.load('friendlyalert',    '/sounds/friendlyalert.mp3');
-SoundManager.load('alert',    '/sounds/alert.mp3');
+await SoundManager.load('drop', '/sounds/drop.mp3');
+await SoundManager.load('friendlydrop',    '/sounds/friendlydrop.mp3');
+await SoundManager.load('friendlyalert',    '/sounds/friendlyalert.mp3');
+await SoundManager.load('alert',    '/sounds/alert.mp3');
+  (async () => {
+    // same resume‐on‐click trick
+    window.addEventListener('click', () => {
+      if (SoundManager.ctx.state === 'suspended') {
+        SoundManager.ctx.resume();
+      }
+    }, { once: true });
 
+    // load your sounds
+await SoundManager.load('drop',            'OFM-Training/sounds/drop.mp3');
+await SoundManager.load('friendlydrop',    'OFM-Training/sounds/friendlydrop.mp3');
+await SoundManager.load('friendlyalert',   'OFM-Training/sounds/friendlyalert.mp3');
+await SoundManager.load('alert',           'OFM-Training/sounds/alert.mp3');
+  })();
 
 const quadrantCoords = {
     "132": [10.5, 7.5],
@@ -550,8 +563,9 @@ async function start(mapId) {
     await redrawBackgroundAsOneTexture();
 const centerX = (mapWidthGrid * gridSizeTPU) / 2;
 const centerY = (mapHeightGrid * gridSizeTPU) / 2;
-  createBall(23 * gridSizeTPU + gridSizeTPU/2, 1 * gridSizeTPU + gridSizeTPU/2, "blue");
-  createBall(1 * gridSizeTPU + gridSizeTPU/2, 17 * gridSizeTPU + gridSizeTPU/2 , "red");
+
+  createBall(centerX * 0.5, centerY, "blue");
+  createBall(centerX * 0.5, centerY, "red");
     gameLoop();
     createAllPhysicsBodies();
 }
