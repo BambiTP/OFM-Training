@@ -71,13 +71,17 @@ let world
   };
 
   // then to play:
-  function playSound(name, opts = {}) {
-    if (SFX[name]) {
-      SFX[name].play(opts);
-    } else {
-      console.warn(`Sound "${name}" not found`);
-    }
+function playSound(name, opts = {}) {
+  const sound = SFX[name];
+  if (!sound) return console.warn(`Sound "${name}" not found`);
+
+  const id = sound.play(); // play and get sound ID
+
+  if (opts.volume !== undefined) {
+    sound.volume(opts.volume, id); // apply volume to this playback only
   }
+}
+
 
 const quadrantCoords = {
     "132": [10.5, 7.5],
