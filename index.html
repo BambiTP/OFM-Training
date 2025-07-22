@@ -64,26 +64,20 @@ let world
 
   // initialize your sounds
   const SFX = {
-  drop: new Howl({ src: ['sounds/drop.mp3'] }),
-  friendlydrop: new Howl({ src: ['sounds/friendlydrop.mp3'] }),
-  friendlyalert: new Howl({ src: ['sounds/friendlyalert.mp3'] }),
-  alert: new Howl({ src: ['sounds/alert.mp3'] }),
-};
+    drop: new Howl({ src: ['sounds/drop.mp3'] }),
+    friendlydrop: new Howl({ src: ['sounds/friendlydrop.mp3'] }),
+    friendlyalert: new Howl({ src: ['sounds/friendlyalert.mp3'] }),
+    alert: new Howl({ src: ['sounds/alert.mp3'] }),
+  };
 
-// 2) A correct playSound wrapper:
-function playSound(name, { volume = 1, loop = false } = {}) {
-  const sound = SFX[name];
-  if (!sound) {
-    console.warn(`Sound "${name}" not found`);
-    return;
+  // then to play:
+  function playSound(name, opts = {}) {
+    if (SFX[name]) {
+      SFX[name].play(opts);
+    } else {
+      console.warn(`Sound "${name}" not found`);
+    }
   }
-  // start playback, get the sound ID
-  const id = sound.play();
-  // then set volume/loop on that specific instance
-  sound.volume(volume, id);
-  sound.loop(loop, id);
-  return id;
-}
 
 const quadrantCoords = {
     "132": [10.5, 7.5],
@@ -726,38 +720,42 @@ function handleBeginContact(contact) {
     // if either is currently respawning/disabled, ignore
     if (!entryA.canControl || !entryB.canControl) return;
 
-    // if A has the flag, pass to B
     if (dataA.flag) {
-      dataA.flag    = false;
-      entryA.flag   = false;
-      dataB.flag    = true;
-      entryB.flag   = true;
-      respawn(A);
-      if (dataA.index === playerId)
-          playSound('friendlydrop');
-          playSound("alert")
-        if (dataB.index === playerId)
-        playSound("drop")
-        playSound("friendlyalert")  
-    }
-    // else if B has the flag, pass to A
-    else if (dataB.flag) {
-      dataB.flag    = false;
-      entryB.flag   = false;
-      dataA.flag    = true;
-      entryA.flag   = true;
-      respawn(B);
-         if (dataB.index === playerId)
-        playSound("friendlydrop")
-        playSound("alert")
-        if (dataA.index === playerId)
-        playSound("drop")
-        playSound("friendlyalert")    
+  dataA.flag    = false;
+  entryA.flag   = false;
+  dataB.flag    = true;
+  entryB.flag   = true;
+  respawn(A);
 
-    }
-
-    return;
+  // Only play friendly sounds if *you* dropped the flag
+  if (A === playerId) {
+    playSound('friendlydrop');
+    playSound('alert'{ volume: 0.5 });
   }
+
+  // Only play enemy drop sound if *they* dropped the flag on *you*
+  if (B === playerId) {
+    playSound('friendlyalert'{ volume: 0.5 });
+    playSound('drop');
+  }
+}
+else if (dataB.flag) {
+  dataB.flag    = false;
+  entryB.flag   = false;
+  dataA.flag    = true;
+  entryA.flag   = true;
+  respawn(B);
+
+  if (B === playerId) {
+    playSound('friendlydrop');
+    playSound('alert');
+  }
+
+  if (A === playerId) {
+    playSound('friendlyalert');
+    playSound('drop');
+  }
+}
 
 
   let ballData, flagData;
