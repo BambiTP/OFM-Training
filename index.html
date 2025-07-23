@@ -535,11 +535,8 @@ async function start(mapId) {
     await cacheAllQuadrants();
     await drawTilesLoop();
     await redrawBackgroundAsOneTexture();
-const centerX = (mapWidthGrid * gridSizeTPU) / 2;
-const centerY = (mapHeightGrid * gridSizeTPU) / 2;
-
-  createBall(centerX * 0.5, centerY, "blue");
-  createBall(centerX * 0.5, centerY, "red");
+  createBall(23 * gridSizeTPU + gridSizeTPU/2, 1 * gridSizeTPU + gridSizeTPU/2, "blue");
+  createBall(1 * gridSizeTPU + gridSizeTPU/2, 17 * gridSizeTPU + gridSizeTPU/2, "red");
     gameLoop();
     createAllPhysicsBodies();
 }
@@ -706,7 +703,6 @@ function createContactListener() {
 
   return listener;
 }
-
 function handleBeginContact(contact) {
   const fixA = contact.GetFixtureA();
   const fixB = contact.GetFixtureB();
@@ -722,21 +718,19 @@ function handleBeginContact(contact) {
     const entryB = balls[B];
 
     // ignore if either is disabled
-    if (!entryA.canControl || !entryB.canControl) {
-      return;
-    }
+    if (!entryA.canControl || !entryB.canControl) return;
 
     // A drops flag on B
     if (dataA.flag) {
-      dataA.flag    = false;
-      entryA.flag   = false;
-      dataB.flag    = true;
-      entryB.flag   = true;
-setTimeout(() => respawn(A), 0);
+      dataA.flag  = false;
+      entryA.flag = false;
+      dataB.flag  = true;
+      entryB.flag = true;
+      setTimeout(() => respawn(A), 0);
 
       if (A === playerId) {
-        playSound('friendlydrop');
-        playSound('alert',{ volume: 0.5 });
+        playSound('friendlydrop', { volume: 0.5 });
+        playSound('alert');
       }
       if (B === playerId) {
         playSound('friendlyalert', { volume: 0.5 });
@@ -745,11 +739,12 @@ setTimeout(() => respawn(A), 0);
     }
     // B drops flag on A
     else if (dataB.flag) {
-      dataB.flag    = false;
-      entryB.flag   = false;
-      dataA.flag    = true;
-      entryA.flag   = true;
+      dataB.flag  = false;
+      entryB.flag = false;
+      dataA.flag  = true;
+      entryA.flag = true;
       setTimeout(() => respawn(B), 0);
+
       if (B === playerId) {
         playSound('friendlydrop', { volume: 0.5 });
         playSound('alert');
@@ -760,7 +755,7 @@ setTimeout(() => respawn(A), 0);
       }
     }
 
-    // we've handled the ball↔ball case, bail out
+    // handled ball↔ball
     return;
   }
 
@@ -783,9 +778,7 @@ setTimeout(() => respawn(A), 0);
   const entry = balls[idx];
 
   // skip if already taken or ball disabled
-  if (flagData.state === 0 || !entry.canControl) {
-    return;
-  }
+  if (flagData.state === 0 || !entry.canControl) return;
 
   // mark ground‐flag as taken & give to ball
   flagData.state = 0;
@@ -802,8 +795,16 @@ setTimeout(() => respawn(A), 0);
   // clear its grid coords
   flagData.gridX = null;
   flagData.gridY = null;
-}
 
+  // play the pickup sound:
+  // if the local player picked it up → friendlyalert
+  // otherwise → alert
+  if (idx === playerId) {
+    playSound('friendlyalert', { volume: 0.5 });
+  } else {
+    playSound('alert');
+  }
+}
 
 function respawn(ballIndex) {
   const entry  = balls[ballIndex];
